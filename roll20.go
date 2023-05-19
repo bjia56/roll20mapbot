@@ -66,8 +66,12 @@ func (r *Roll20Browser) Launch() error {
 // launchImpl contains the implementation of the launch process.
 // This is not inherently thread safe, so a lock must be acquired
 // before this function is called.
-func (r *Roll20Browser) launchImpl() error {
-	var err error
+func (r *Roll20Browser) launchImpl() (err error) {
+	defer func() {
+		if err != nil {
+			r.closeImpl()
+		}
+	}()
 
 	// setup playwright and chromium browser
 	logrus.Printf("Starting browser")
@@ -168,7 +172,6 @@ func (r *Roll20Browser) launchImpl() error {
 	}
 
 	logrus.Printf("Browser is ready")
-
 	return nil
 }
 
@@ -183,15 +186,25 @@ func (r *Roll20Browser) Close() {
 // This is not inherently thread safe, so a lock must be acquired
 // before this function is called.
 func (r *Roll20Browser) closeImpl() {
-	if err := r.browser.Close(); err != nil {
-		panic(err)
+	if r.browser != nil {
+		if err := r.browser.Close(); err != nil {
+			logrus.Error(err)
+		}
+		r.browser = nil
 	}
-	if err := r.playwright.Stop(); err != nil {
-		panic(err)
+	if r.playwright != nil {
+		if err := r.playwright.Stop(); err != nil {
+			logrus.Error(err)
+		}
+		r.playwright = nil
 	}
-	if err := os.RemoveAll(r.downloadDirectory); err != nil {
-		panic(err)
+	if r.downloadDirectory != "" {
+		if err := os.RemoveAll(r.downloadDirectory); err != nil {
+			logrus.Error(err)
+		}
+		r.downloadDirectory = ""
 	}
+	r.page = nil
 }
 
 func (r *Roll20Browser) Relaunch() error {
@@ -221,6 +234,10 @@ func (r *Roll20Browser) getMap() (image.Image, error) {
 
 	if r.closed {
 		return nil, fmt.Errorf("browser closed")
+	}
+
+	if r.page == nil {
+		return nil, fmt.Errorf("browser page not active")
 	}
 
 	logrus.Printf("Evaluating scraper script")

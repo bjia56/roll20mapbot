@@ -53,36 +53,19 @@ var commands = map[string]func(*Application, *discordgo.Session, *discordgo.Mess
 			return
 		}
 	},
-	"reload": func(app *Application, s *discordgo.Session, m *discordgo.MessageCreate) {
-		_, err := s.ChannelMessageSend(m.ChannelID, "Reloading roll20 browser(s), this may take a minute...")
-		if err != nil {
-			logrus.Errorf("Error responding to reload: %s", err)
-			return
-		}
+	"roll": func(a *Application, s *discordgo.Session, mc *discordgo.MessageCreate) {
 
-		for _, r20 := range app.Roll20Instances {
-			err = r20.Relaunch()
-			if err != nil {
-				logrus.Errorf("Error reloading roll20: %s", err)
-				_, err := s.ChannelMessageSend(m.ChannelID, "Error reloading roll20. A restart may be required.")
-				if err != nil {
-					logrus.Errorf("Error sending error message: %s", err)
-					return
-				}
-				return
-			}
-		}
-
-		_, err = s.ChannelMessageSend(m.ChannelID, "Successfully reloaded roll20 browser(s).")
-		if err != nil {
-			logrus.Errorf("Error sending success message: %s", err)
-			return
-		}
 	},
 	"debuginfo": func(a *Application, s *discordgo.Session, m *discordgo.MessageCreate) {
 		logrus.Info(spew.Sdump(m))
 		s.ChannelMessageSend(m.ChannelID, "Debugging information printed to bot console.")
 	},
+}
+
+func init() {
+	// initialize shortcuts
+	commands["m"] = commands["map"]
+	commands["r"] = commands["roll"]
 }
 
 type Application struct {
@@ -142,6 +125,7 @@ func (app *Application) periodicRelaunch() {
 			err := r20.Relaunch()
 			if err != nil {
 				logrus.Errorf("Error reloading roll20: %s", err)
+				time.Sleep(time.Second * 10)
 				continue
 			}
 		}
