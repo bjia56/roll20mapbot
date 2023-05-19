@@ -13,7 +13,10 @@ ENV PATH=$PATH:/usr/local/go/bin:/root/go/bin
 RUN go install github.com/playwright-community/playwright-go/cmd/playwright@latest && \
     playwright install --with-deps
 
+RUN mkdir /src
+WORKDIR /src
 COPY . .
 RUN go install .
+WORKDIR /
 
-ENTRYPOINT roll20mapbot
+ENTRYPOINT ["roll20mapbot"]
