@@ -2,7 +2,7 @@ FROM ubuntu:20.04
 
 RUN set -eux; \
 	apt-get update; \
-	apt-get install -y --no-install-recommends \
+	apt-get install -y --no-install-recommends wget \
 		g++ \
 		gcc \
 		libc6-dev \
