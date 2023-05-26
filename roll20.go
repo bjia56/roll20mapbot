@@ -27,8 +27,9 @@ type Roll20Browser struct {
 	password string
 	game     string
 
-	hdResolution uint
-	sdResolution uint
+	resolution     uint
+	viewportWidth  uint
+	viewportHeight uint
 
 	playwright        *playwright.Playwright
 	browser           playwright.Browser
@@ -37,18 +38,18 @@ type Roll20Browser struct {
 	lock              *sync.Mutex
 	closed            bool
 
-	cachedSD []byte
-	cachedHD []byte
+	cachedImg []byte
 }
 
-func NewRoll20Browser(email, password, game string, hdResolution, sdResolution uint) *Roll20Browser {
+func NewRoll20Browser(email, password, game string, resolution, viewportWidth, viewportHeight uint) *Roll20Browser {
 	return &Roll20Browser{
-		email:        email,
-		password:     password,
-		game:         game,
-		hdResolution: hdResolution,
-		sdResolution: sdResolution,
-		lock:         &sync.Mutex{},
+		email:          email,
+		password:       password,
+		game:           game,
+		resolution:     resolution,
+		viewportWidth:  viewportWidth,
+		viewportHeight: viewportHeight,
+		lock:           &sync.Mutex{},
 	}
 }
 
@@ -80,14 +81,20 @@ func (r *Roll20Browser) launchImpl() (err error) {
 		return fmt.Errorf("could not start playwright: %w", err)
 	}
 
-	r.browser, err = r.playwright.Chromium.Launch(playwright.BrowserTypeLaunchOptions{Headless: newBool(true)})
+	r.browser, err = r.playwright.Chromium.Launch(playwright.BrowserTypeLaunchOptions{Headless: playwright.Bool(true)})
 	if err != nil {
 		return fmt.Errorf("could not launch browser: %w", err)
 	}
 
 	// navigate to roll20
 	logrus.Printf("Navigating to https://roll20.net")
-	r.page, err = r.browser.NewPage(playwright.BrowserNewContextOptions{AcceptDownloads: newBool(true)})
+	r.page, err = r.browser.NewPage(playwright.BrowserNewContextOptions{
+		AcceptDownloads: playwright.Bool(true),
+		Viewport: &playwright.BrowserNewContextOptionsViewport{
+			Height: playwright.Int(int(r.viewportHeight)),
+			Width:  playwright.Int(int(r.viewportWidth)),
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("could not create page: %w", err)
 	}
@@ -215,17 +222,11 @@ func (r *Roll20Browser) Relaunch() error {
 	return r.launchImpl()
 }
 
-func (r *Roll20Browser) GetMap(isHD bool) (io.Reader, error) {
-	if isHD {
-		if r.cachedHD == nil {
-			return nil, fmt.Errorf("cached map not yet ready")
-		}
-		return bytes.NewReader(r.cachedHD), nil
-	}
-	if r.cachedSD == nil {
+func (r *Roll20Browser) GetMap() (io.Reader, error) {
+	if r.cachedImg == nil {
 		return nil, fmt.Errorf("cached map not yet ready")
 	}
-	return bytes.NewReader(r.cachedSD), nil
+	return bytes.NewReader(r.cachedImg), nil
 }
 
 func (r *Roll20Browser) getMap() (image.Image, error) {
@@ -285,22 +286,14 @@ func (r *Roll20Browser) periodicGetMap() {
 
 		logrus.Printf("Resizing image")
 		// resize and preserve aspect ratio
-		hd := resize.Resize(r.hdResolution, 0, img, resize.Lanczos3)
-		sd := resize.Resize(r.sdResolution, 0, img, resize.Lanczos3)
+		resized := resize.Resize(r.resolution, 0, img, resize.Lanczos3)
 
 		logrus.Printf("Converting resized images to buffer")
 		// write new images to buffer
-		hdBuf := new(bytes.Buffer)
-		png.Encode(hdBuf, hd)
-		sdBuf := new(bytes.Buffer)
-		png.Encode(sdBuf, sd)
+		buf := new(bytes.Buffer)
+		png.Encode(buf, resized)
 
-		r.cachedHD = hdBuf.Bytes()
-		r.cachedSD = sdBuf.Bytes()
+		r.cachedImg = buf.Bytes()
 		time.Sleep(time.Minute - time.Second*5 + time.Second*time.Duration(rand.Intn(10)))
 	}
-}
-
-func newBool(b bool) *bool {
-	return &b
 }

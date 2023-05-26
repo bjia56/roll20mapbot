@@ -9,11 +9,12 @@ type Config struct {
 		Roll20Game     string   `json:"roll20_game" default:"My Game"`
 		TargetChannels []string `json:"target_channels"`
 	} `json:"roll20_instances"`
-	DiscordToken       string `json:"discord_token" default:"ABC.123.XYZ"`
-	DiscordStatus      string `json:"discord_status" default:""`
-	StandardResolution uint   `json:"standard_resolution" default:"1000"`
-	HDResolution       uint   `json:"hd_resolution" default:"2000"`
-	TimeDelay          uint   `json:"time_delay" default:"10"`
+	DiscordToken   string `json:"discord_token" default:"ABC.123.XYZ"`
+	DiscordStatus  string `json:"discord_status" default:""`
+	Resolution     uint   `json:"resolution" default:"2000"`
+	ViewportWidth  uint   `json:"viewport_width" default:"640"`
+	ViewportHeight uint   `json:"viewport_height" default:"480"`
+	TimeDelay      uint   `json:"time_delay" default:"10"`
 }
 
 func DefaultConfig() Config {

@@ -37,7 +37,7 @@ var commands = map[string]func(*Application, *discordgo.Session, *discordgo.Mess
 			return
 		}
 
-		picture, err := r20.GetMap(true)
+		picture, err := r20.GetMap()
 		if err != nil {
 			logrus.Errorf("Error getting map with spam protection: %s", err)
 			return
@@ -83,7 +83,7 @@ func NewApplication(config Config) *Application {
 		Roll20ChannelMap: make(map[string]*Roll20Browser),
 	}
 	for _, cfg := range config.Roll20Instances {
-		r20 := NewRoll20Browser(cfg.Roll20Email, cfg.Roll20Password, cfg.Roll20Game, config.HDResolution, config.StandardResolution)
+		r20 := NewRoll20Browser(cfg.Roll20Email, cfg.Roll20Password, cfg.Roll20Game, config.Resolution, config.ViewportWidth, config.ViewportHeight)
 		for _, target := range cfg.TargetChannels {
 			if _, ok := app.Roll20ChannelMap[target]; ok {
 				panic(fmt.Errorf("channel %s is tracking multiple roll20 instances", target))
