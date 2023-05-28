@@ -16,7 +16,8 @@ RUN go install github.com/playwright-community/playwright-go/cmd/playwright@late
 RUN mkdir /src
 WORKDIR /src
 COPY . .
-RUN go install .
+RUN go install -ldflags '-w -s' . && \
+    roll20mapbot --help
 WORKDIR /
 
 ENTRYPOINT ["roll20mapbot"]
