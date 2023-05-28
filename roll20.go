@@ -7,7 +7,6 @@ import (
 	"image"
 	"image/png"
 	"io"
-	"math/rand"
 	"os"
 	"path"
 	"strings"
