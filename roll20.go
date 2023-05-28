@@ -74,6 +74,10 @@ func (r *Roll20Browser) launchImpl() (err error) {
 		}
 	}()
 
+	if r.closed {
+		return nil
+	}
+
 	// setup playwright and chromium browser
 	logrus.Printf("Starting browser")
 	r.playwright, err = playwright.Run()
@@ -281,7 +285,7 @@ func (r *Roll20Browser) periodicGetMap() {
 		img, err := r.getMap()
 		if err != nil {
 			logrus.Errorf("Error getting map: %s", err)
-			time.Sleep(time.Minute)
+			r.Relaunch()
 			continue
 		}
 
@@ -295,6 +299,6 @@ func (r *Roll20Browser) periodicGetMap() {
 		png.Encode(buf, resized)
 
 		r.cachedImg = buf.Bytes()
-		time.Sleep(time.Minute - time.Second*5 + time.Second*time.Duration(rand.Intn(10)))
+		time.Sleep(time.Minute)
 	}
 }
