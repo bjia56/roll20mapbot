@@ -281,6 +281,7 @@ func (r *Roll20Browser) periodicGetMap() {
 		img, err := r.getMap()
 		if err != nil {
 			logrus.Errorf("Error getting map: %s", err)
+			time.Sleep(time.Minute)
 			continue
 		}
 
