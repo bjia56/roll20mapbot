@@ -4,7 +4,7 @@ RUN apt update && \
     apt upgrade -y && \
     apt install -y wget
 
-RUN wget "https://go.dev/dl/go1.20.4.linux-$(dpkg --print-architecture).tar.gz" && \
+RUN wget -q "https://go.dev/dl/go1.20.4.linux-$(dpkg --print-architecture).tar.gz" && \
     rm -rf /usr/local/go && \
     tar -C /usr/local -xzf go*.tar.gz && \
     rm go*.tar.gz
