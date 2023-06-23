@@ -12,8 +12,8 @@ type Config struct {
 	DiscordToken   string `json:"discord_token" default:"ABC.123.XYZ"`
 	DiscordStatus  string `json:"discord_status" default:""`
 	Resolution     uint   `json:"resolution" default:"2000"`
-	ViewportWidth  uint   `json:"viewport_width" default:"640"`
-	ViewportHeight uint   `json:"viewport_height" default:"480"`
+	ViewportWidth  uint   `json:"viewport_width" default:"1280"`
+	ViewportHeight uint   `json:"viewport_height" default:"720"`
 	TimeDelay      uint   `json:"time_delay" default:"10"`
 }
 

@@ -45,7 +45,7 @@ var commands = map[string]func(*Application, *discordgo.Session, *discordgo.Mess
 
 		_, err = s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 			Files: []*discordgo.File{
-				{Name: "map.png", Reader: picture},
+				{Name: "map.jpg", Reader: picture},
 			},
 		})
 		if err != nil {
