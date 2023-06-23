@@ -1,0 +1,15 @@
+version: '3.5'
+
+services:
+  roll20mapbot:
+    image: ghcr.io/bjia56/roll20mapbot:main
+    container_name: roll20mapbot
+    restart: unless-stopped
+    volumes:
+      - ./config.json:/config.json
+    logging:
+      driver: "json-file"
+      options:
+         max-size: "10m"
+         max-file: "10"
+    command: -c /config.json
