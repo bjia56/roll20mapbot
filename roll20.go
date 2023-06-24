@@ -60,7 +60,8 @@ func (r *Roll20Browser) Launch() error {
 	if err != nil {
 		return err
 	}
-	go r.periodicGetMap()
+	r.periodicGetMap(true)
+	go r.periodicGetMap(false)
 	return nil
 }
 
@@ -239,9 +240,11 @@ func (r *Roll20Browser) GetMap() (io.Reader, error) {
 	return bytes.NewReader(r.cachedImg), nil
 }
 
-func (r *Roll20Browser) getMap() (image.Image, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
+func (r *Roll20Browser) getMap(isPreload bool) (image.Image, error) {
+	if !isPreload {
+		r.lock.Lock()
+		defer r.lock.Unlock()
+	}
 
 	if r.closed {
 		return nil, fmt.Errorf("browser closed")
@@ -285,10 +288,15 @@ func (r *Roll20Browser) getMap() (image.Image, error) {
 	return img, nil
 }
 
-func (r *Roll20Browser) periodicGetMap() {
+func (r *Roll20Browser) periodicGetMap(isPreload bool) {
+	sleepDuration := time.Second * 30
+	if !isPreload {
+		time.Sleep(sleepDuration)
+	}
+
 	for !r.closed {
 		logrus.Printf("Starting periodic map fetch")
-		img, err := r.getMap()
+		img, err := r.getMap(isPreload)
 		if err != nil {
 			logrus.Errorf("Error getting map: %s", err)
 			r.Relaunch()
@@ -315,7 +323,11 @@ func (r *Roll20Browser) periodicGetMap() {
 		r.cachedImg = buf.Bytes()
 		logrus.Printf("Image saved")
 
-		time.Sleep(time.Minute)
+		if isPreload {
+			break
+		}
+
+		time.Sleep(sleepDuration)
 	}
 }
 

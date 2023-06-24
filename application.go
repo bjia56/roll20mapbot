@@ -12,7 +12,7 @@ import (
 
 var prefix = '%'
 
-var commands = map[string]func(*Application, *discordgo.Session, *discordgo.MessageCreate){
+var msgCommandHandlers = map[string]func(*Application, *discordgo.Session, *discordgo.MessageCreate){
 	"ping": func(app *Application, s *discordgo.Session, m *discordgo.MessageCreate) {
 		start := time.Now()
 
@@ -39,7 +39,7 @@ var commands = map[string]func(*Application, *discordgo.Session, *discordgo.Mess
 
 		picture, err := r20.GetMap()
 		if err != nil {
-			logrus.Errorf("Error getting map with spam protection: %s", err)
+			logrus.Errorf("Error getting map: %s", err)
 			return
 		}
 
@@ -64,8 +64,62 @@ var commands = map[string]func(*Application, *discordgo.Session, *discordgo.Mess
 
 func init() {
 	// initialize shortcuts
-	commands["m"] = commands["map"]
-	commands["r"] = commands["roll"]
+	msgCommandHandlers["m"] = msgCommandHandlers["map"]
+	msgCommandHandlers["r"] = msgCommandHandlers["roll"]
+}
+
+var slashCommands = []*discordgo.ApplicationCommand{
+	{
+		Name:        "map",
+		Description: "Show roll20 map",
+	},
+}
+
+var slashCommandHandlers = map[string]func(*Application, *discordgo.Session, *discordgo.InteractionCreate){
+	"map": func(app *Application, s *discordgo.Session, i *discordgo.InteractionCreate) {
+		r20, ok := app.Roll20ChannelMap[i.ChannelID]
+		if !ok {
+			logrus.Info("Ignoring untracked channel %s", i.ChannelID)
+			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Channel is untracked",
+				},
+			})
+			if err != nil {
+				logrus.Errorf("Error responding: %s", err)
+			}
+			return
+		}
+
+		picture, err := r20.GetMap()
+		if err != nil {
+			logrus.Errorf("Error getting map: %s", err)
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Error getting map",
+				},
+			})
+			if err != nil {
+				logrus.Errorf("Error responding: %s", err)
+			}
+			return
+		}
+
+		err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Files: []*discordgo.File{
+					{Name: "map.jpg", Reader: picture},
+				},
+			},
+		})
+		if err != nil {
+			logrus.Errorf("Cannot post picture: %s", err)
+			return
+		}
+	},
 }
 
 type Application struct {
@@ -92,7 +146,7 @@ func NewApplication(config Config) *Application {
 		}
 		app.Roll20Instances = append(app.Roll20Instances, r20)
 	}
-	app.Discord = NewDiscordBot(config.DiscordToken, config.DiscordStatus, app.DiscordMessageCreateHandler())
+	app.Discord = NewDiscordBot(config.DiscordToken, config.DiscordStatus, app.DiscordMessageCreateHandler(), slashCommands, app.DiscordInteractionCreateHandler())
 	return app
 }
 
@@ -141,7 +195,7 @@ func (app *Application) Close() {
 	app.Discord.Close()
 }
 
-func (app *Application) DiscordMessageCreateHandler() func(*discordgo.Session, *discordgo.MessageCreate) {
+func (app *Application) DiscordMessageCreateHandler() MsgHandler {
 	return func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		// ignore all messages created by the bot itself
 		if m.Author.ID == s.State.User.ID {
@@ -162,7 +216,7 @@ func (app *Application) DiscordMessageCreateHandler() func(*discordgo.Session, *
 
 		command := strings.ToLower(string(runes[1:]))
 
-		f, ok := commands[command]
+		f, ok := msgCommandHandlers[command]
 
 		// ignore unknown commands
 		if !ok {
@@ -171,5 +225,13 @@ func (app *Application) DiscordMessageCreateHandler() func(*discordgo.Session, *
 
 		// run command
 		go f(app, s, m)
+	}
+}
+
+func (app *Application) DiscordInteractionCreateHandler() SlashHandler {
+	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		if h, ok := slashCommandHandlers[i.ApplicationCommandData().Name]; ok {
+			go h(app, s, i)
+		}
 	}
 }
