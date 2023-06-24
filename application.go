@@ -33,7 +33,7 @@ var msgCommandHandlers = map[string]func(*Application, *discordgo.Session, *disc
 	"map": func(app *Application, s *discordgo.Session, m *discordgo.MessageCreate) {
 		r20, ok := app.Roll20ChannelMap[m.ChannelID]
 		if !ok {
-			logrus.Info("Ignoring untracked channel %s", m.ChannelID)
+			logrus.Infof("Ignoring untracked channel %s", m.ChannelID)
 			return
 		}
 
@@ -79,7 +79,7 @@ var slashCommandHandlers = map[string]func(*Application, *discordgo.Session, *di
 	"map": func(app *Application, s *discordgo.Session, i *discordgo.InteractionCreate) {
 		r20, ok := app.Roll20ChannelMap[i.ChannelID]
 		if !ok {
-			logrus.Info("Ignoring untracked channel %s", i.ChannelID)
+			logrus.Infof("Ignoring untracked channel %s", i.ChannelID)
 			err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
