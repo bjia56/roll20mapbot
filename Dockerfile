@@ -10,7 +10,7 @@ RUN wget -q "https://go.dev/dl/go1.20.4.linux-$(dpkg --print-architecture).tar.g
     rm go*.tar.gz
 ENV PATH=$PATH:/usr/local/go/bin:/root/go/bin
 
-RUN go install github.com/playwright-community/playwright-go/cmd/playwright@latest && \
+RUN go install github.com/playwright-community/playwright-go/cmd/playwright@v0.2000.1 && \
     playwright install --with-deps
 
 RUN mkdir /src
