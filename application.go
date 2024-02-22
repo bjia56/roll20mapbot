@@ -73,6 +73,10 @@ var slashCommands = []*discordgo.ApplicationCommand{
 		Name:        "map",
 		Description: "Show roll20 map",
 	},
+	{
+		Name:        "cslist",
+		Description: "List all character sheets on roll20",
+	},
 }
 
 var slashCommandHandlers = map[string]func(*Application, *discordgo.Session, *discordgo.InteractionCreate){
@@ -117,6 +121,48 @@ var slashCommandHandlers = map[string]func(*Application, *discordgo.Session, *di
 		})
 		if err != nil {
 			logrus.Errorf("Cannot post picture: %s", err)
+			return
+		}
+	},
+	"cslist": func(app *Application, s *discordgo.Session, ic *discordgo.InteractionCreate) {
+		r20, ok := app.Roll20ChannelMap[ic.ChannelID]
+		if !ok {
+			logrus.Infof("Ignoring untracked channel %s", ic.ChannelID)
+			err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Channel is untracked",
+				},
+			})
+			if err != nil {
+				logrus.Errorf("Error responding: %s", err)
+			}
+			return
+		}
+
+		csList, err := r20.ListCharacterSheets()
+		if err != nil {
+			logrus.Errorf("Error getting character sheets: %s", err)
+			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Error getting character sheets",
+				},
+			})
+			if err != nil {
+				logrus.Errorf("Error responding: %s", err)
+			}
+			return
+		}
+
+		err = s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("```\n%s\n```", strings.Join(csList, "\n")),
+			},
+		})
+		if err != nil {
+			logrus.Errorf("Error responding: %s", err)
 			return
 		}
 	},

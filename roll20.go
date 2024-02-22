@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -86,7 +87,10 @@ func (r *Roll20Browser) launchImpl() (err error) {
 		return fmt.Errorf("could not start playwright: %w", err)
 	}
 
-	r.browser, err = r.playwright.Chromium.Launch(playwright.BrowserTypeLaunchOptions{Headless: playwright.Bool(true)})
+	r.browser, err = r.playwright.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
+		Headless: playwright.Bool(true),
+		Args:     []string{"--kiosk-printing"},
+	})
 	if err != nil {
 		return fmt.Errorf("could not launch browser: %w", err)
 	}
@@ -184,6 +188,26 @@ func (r *Roll20Browser) launchImpl() (err error) {
 	logrus.Printf("Waiting for roll20 screen to load")
 	time.Sleep(30 * time.Second)
 
+	anchors, err := r.page.QuerySelectorAll("a")
+	if err != nil {
+		return fmt.Errorf("could not find anchors: %w", err)
+	}
+	foundJournalAnchor := false
+	for _, anchor := range anchors {
+		txt, err := anchor.GetProperty("href")
+		if err != nil {
+			return fmt.Errorf("could not read anchor href: %w", err)
+		}
+		if strings.HasSuffix(txt.String(), "#journal") {
+			anchor.Click()
+			foundJournalAnchor = true
+			break
+		}
+	}
+	if !foundJournalAnchor {
+		return fmt.Errorf("could not find journal anchor")
+	}
+
 	r.downloadDirectory, err = os.MkdirTemp("", "")
 	if err != nil {
 		return fmt.Errorf("could not create temporary output directory: %w", err)
@@ -231,6 +255,36 @@ func (r *Roll20Browser) Relaunch() error {
 	logrus.Printf("Restarting roll20 browser")
 	r.closeImpl()
 	return r.launchImpl()
+}
+
+func (r *Roll20Browser) ListCharacterSheets() ([]string, error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	journalNames, err := r.page.QuerySelectorAll(".journalitem .name")
+	if err != nil {
+		return nil, fmt.Errorf("could not find journal names: %w", err)
+	}
+
+	var names []string
+	for _, name := range journalNames {
+		txt, err := name.InnerText()
+		if err != nil {
+			return nil, fmt.Errorf("could not read journal name: %w", err)
+		}
+		txt = strings.Split(txt, "\n")[0]
+		if txt == "Shared Inventory" {
+			continue
+		}
+		names = append(names, strings.TrimSpace(txt))
+	}
+
+	sort.StringSlice(names).Sort()
+	return names, nil
+}
+
+func (r *Roll20Browser) GetCharacterSheet(name string) (io.Reader, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (r *Roll20Browser) GetMap() (io.Reader, error) {
