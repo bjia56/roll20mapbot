@@ -39,7 +39,8 @@ type Roll20Browser struct {
 	lock              *sync.Mutex
 	closed            bool
 
-	cachedImg []byte
+	cachedImg             []byte
+	cachedCharacterSheets map[string][]byte
 }
 
 func NewRoll20Browser(email, password, game string, resolution, viewportWidth, viewportHeight uint) *Roll20Browser {
@@ -63,6 +64,8 @@ func (r *Roll20Browser) Launch() error {
 	}
 	r.periodicGetMap(true)
 	go r.periodicGetMap(false)
+	r.periodicGetCharacterSheets(true)
+	go r.periodicGetCharacterSheets(false)
 	return nil
 }
 
@@ -80,7 +83,7 @@ func (r *Roll20Browser) launchImpl() (err error) {
 		return nil
 	}
 
-	// setup playwright and chromium browser
+	// setup playwright and browser
 	logrus.Printf("Starting browser")
 	r.playwright, err = playwright.Run()
 	if err != nil {
@@ -88,7 +91,7 @@ func (r *Roll20Browser) launchImpl() (err error) {
 	}
 
 	r.browser, err = r.playwright.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(true),
+		Headless: playwright.Bool(false),
 		Args:     []string{"--kiosk-printing"},
 	})
 	if err != nil {
@@ -257,9 +260,11 @@ func (r *Roll20Browser) Relaunch() error {
 	return r.launchImpl()
 }
 
-func (r *Roll20Browser) ListCharacterSheets() ([]string, error) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
+func (r *Roll20Browser) ListCharacterSheets(isPreload bool) ([]string, error) {
+	if !isPreload {
+		r.lock.Lock()
+		defer r.lock.Unlock()
+	}
 
 	journalNames, err := r.page.QuerySelectorAll(".journalitem .name")
 	if err != nil {
@@ -284,7 +289,140 @@ func (r *Roll20Browser) ListCharacterSheets() ([]string, error) {
 }
 
 func (r *Roll20Browser) GetCharacterSheet(name string) (io.Reader, error) {
-	return nil, fmt.Errorf("not implemented")
+	if r.cachedCharacterSheets == nil {
+		return nil, fmt.Errorf("cached character sheets not yet ready")
+	}
+
+	sheet, ok := r.cachedCharacterSheets[name]
+	if !ok {
+		return nil, fmt.Errorf("character sheet not found")
+	}
+
+	return bytes.NewReader(sheet), nil
+}
+
+func (r *Roll20Browser) getCharacterSheet(name string, isPreload bool) ([]byte, error) {
+	if !isPreload {
+		r.lock.Lock()
+		defer r.lock.Unlock()
+	}
+
+	journalitems, err := r.page.QuerySelectorAll(".journalitem")
+	if err != nil {
+		return nil, fmt.Errorf("could not find journal items: %w", err)
+	}
+
+	var found bool
+	for _, journalitem := range journalitems {
+		txt, err := journalitem.InnerHTML()
+		if err != nil {
+			return nil, fmt.Errorf("could not read journal item: %w", err)
+		}
+		if strings.Contains(txt, name) {
+			found = true
+			err = journalitem.Click()
+			if err != nil {
+				return nil, fmt.Errorf("could not click journal item: %w", err)
+			}
+			break
+		}
+	}
+
+	if !found {
+		return nil, fmt.Errorf("could not find journal item")
+	}
+
+	// wait for the journal to load
+	time.Sleep(5 * time.Second)
+
+	// find print button
+	printBtn, err := r.page.QuerySelector("#printsheet")
+	if err != nil {
+		return nil, fmt.Errorf("could not find print button: %w", err)
+	}
+
+	// click print button
+	err = printBtn.Click()
+	if err != nil {
+		return nil, fmt.Errorf("could not click print button: %w", err)
+	}
+	time.Sleep(5 * time.Second)
+
+	// walk through Downloads dir to find pdf
+	files, err := os.ReadDir(path.Join(os.Getenv("HOME"), "Downloads"))
+	if err != nil {
+		return nil, fmt.Errorf("could not read downloads dir: %w", err)
+	}
+
+	buf := new(bytes.Buffer)
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".pdf") {
+			pdf, err := os.Open(path.Join(os.Getenv("HOME"), "Downloads", file.Name()))
+			if err != nil {
+				return nil, fmt.Errorf("could not open pdf: %w", err)
+			}
+			defer pdf.Close()
+			defer os.Remove(pdf.Name())
+
+			_, err = buf.ReadFrom(pdf)
+			if err != nil {
+				return nil, fmt.Errorf("could not read pdf: %w", err)
+			}
+
+			break
+		}
+	}
+
+	close, err := r.page.QuerySelector(".ui-icon-closethick")
+	if err != nil {
+		return nil, fmt.Errorf("could not find close button: %w", err)
+	}
+	err = close.Click()
+	if err != nil {
+		return nil, fmt.Errorf("could not click close button: %w", err)
+	}
+
+	time.Sleep(1 * time.Second)
+
+	return buf.Bytes(), nil
+}
+
+func (r *Roll20Browser) periodicGetCharacterSheets(isPreload bool) {
+	sleepDuration := time.Second * 300
+	if !isPreload {
+		time.Sleep(sleepDuration)
+	}
+
+	for !r.closed {
+		logrus.Printf("Starting periodic character sheet fetch")
+		names, err := r.ListCharacterSheets(isPreload)
+		if err != nil {
+			logrus.Errorf("Error getting character sheets: %s", err)
+			r.Relaunch()
+			continue
+		}
+
+		sheets := make(map[string][]byte)
+		for _, name := range names {
+			logrus.Printf("Getting character sheet: %s", name)
+			sheet, err := r.getCharacterSheet(name, isPreload)
+			if err != nil {
+				logrus.Errorf("Error getting character sheet: %s", err)
+				r.Relaunch()
+				continue
+			}
+			sheets[name] = sheet
+		}
+
+		r.cachedCharacterSheets = sheets
+		logrus.Printf("Character sheets saved")
+
+		if isPreload {
+			break
+		}
+
+		time.Sleep(sleepDuration)
+	}
 }
 
 func (r *Roll20Browser) GetMap() (io.Reader, error) {

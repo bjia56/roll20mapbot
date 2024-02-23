@@ -74,8 +74,20 @@ var slashCommands = []*discordgo.ApplicationCommand{
 		Description: "Show roll20 map",
 	},
 	{
-		Name:        "cslist",
+		Name:        "characters",
 		Description: "List all character sheets on roll20",
+	},
+	{
+		Name:        "sheet",
+		Description: "Show character sheet",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "name",
+				Description: "Name of the character sheet",
+				Required:    true,
+			},
+		},
 	},
 }
 
@@ -124,7 +136,7 @@ var slashCommandHandlers = map[string]func(*Application, *discordgo.Session, *di
 			return
 		}
 	},
-	"cslist": func(app *Application, s *discordgo.Session, ic *discordgo.InteractionCreate) {
+	"characters": func(app *Application, s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		r20, ok := app.Roll20ChannelMap[ic.ChannelID]
 		if !ok {
 			logrus.Infof("Ignoring untracked channel %s", ic.ChannelID)
@@ -140,7 +152,7 @@ var slashCommandHandlers = map[string]func(*Application, *discordgo.Session, *di
 			return
 		}
 
-		csList, err := r20.ListCharacterSheets()
+		csList, err := r20.ListCharacterSheets(false)
 		if err != nil {
 			logrus.Errorf("Error getting character sheets: %s", err)
 			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
@@ -159,6 +171,51 @@ var slashCommandHandlers = map[string]func(*Application, *discordgo.Session, *di
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: fmt.Sprintf("```\n%s\n```", strings.Join(csList, "\n")),
+			},
+		})
+		if err != nil {
+			logrus.Errorf("Error responding: %s", err)
+			return
+		}
+	},
+	"sheet": func(app *Application, s *discordgo.Session, ic *discordgo.InteractionCreate) {
+		r20, ok := app.Roll20ChannelMap[ic.ChannelID]
+		if !ok {
+			logrus.Infof("Ignoring untracked channel %s", ic.ChannelID)
+			err := s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Channel is untracked",
+				},
+			})
+			if err != nil {
+				logrus.Errorf("Error responding: %s", err)
+			}
+			return
+		}
+
+		character := ic.ApplicationCommandData().Options[0].StringValue()
+		cs, err := r20.GetCharacterSheet(character)
+		if err != nil {
+			logrus.Errorf("Error getting character sheet: %s", err)
+			err = s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Error getting character sheet",
+				},
+			})
+			if err != nil {
+				logrus.Errorf("Error responding: %s", err)
+			}
+			return
+		}
+
+		err = s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Files: []*discordgo.File{
+					{Name: fmt.Sprintf("%s.pdf", character), Reader: cs},
+				},
 			},
 		})
 		if err != nil {
@@ -278,6 +335,8 @@ func (app *Application) DiscordInteractionCreateHandler() SlashHandler {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := slashCommandHandlers[i.ApplicationCommandData().Name]; ok {
 			go h(app, s, i)
+		} else {
+			logrus.Errorf("Unknown slash command %s", i.ApplicationCommandData().Name)
 		}
 	}
 }

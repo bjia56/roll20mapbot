@@ -55,11 +55,9 @@ func (d *DiscordBot) Launch() error {
 		return fmt.Errorf("error setting game status: %w", err)
 	}
 
-	for _, c := range d.slashCmds {
-		_, err := d.session.ApplicationCommandCreate(d.session.State.User.ID, "", c)
-		if err != nil {
-			return fmt.Errorf("could not create slash command %s: %w", c.Name, err)
-		}
+	_, err = d.session.ApplicationCommandBulkOverwrite(d.session.State.User.ID, "", d.slashCmds)
+	if err != nil {
+		return fmt.Errorf("error bulk overwriting slash commands: %w", err)
 	}
 
 	logrus.Printf("Discord bot is ready")
