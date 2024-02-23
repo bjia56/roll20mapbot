@@ -152,7 +152,7 @@ var slashCommandHandlers = map[string]func(*Application, *discordgo.Session, *di
 			return
 		}
 
-		csList, err := r20.ListCharacterSheets(false)
+		csList, err := r20.ListCharacterSheets()
 		if err != nil {
 			logrus.Errorf("Error getting character sheets: %s", err)
 			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{

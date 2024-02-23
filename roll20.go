@@ -260,7 +260,20 @@ func (r *Roll20Browser) Relaunch() error {
 	return r.launchImpl()
 }
 
-func (r *Roll20Browser) ListCharacterSheets(isPreload bool) ([]string, error) {
+func (r *Roll20Browser) ListCharacterSheets() ([]string, error) {
+	if r.cachedCharacterSheets == nil {
+		return nil, fmt.Errorf("cached character sheets not yet ready")
+	}
+
+	var names []string
+	for name := range r.cachedCharacterSheets {
+		names = append(names, name)
+	}
+	sort.StringSlice(names).Sort()
+	return names, nil
+}
+
+func (r *Roll20Browser) listCharacterSheets(isPreload bool) ([]string, error) {
 	if !isPreload {
 		r.lock.Lock()
 		defer r.lock.Unlock()
@@ -284,7 +297,6 @@ func (r *Roll20Browser) ListCharacterSheets(isPreload bool) ([]string, error) {
 		names = append(names, strings.TrimSpace(txt))
 	}
 
-	sort.StringSlice(names).Sort()
 	return names, nil
 }
 
@@ -395,7 +407,7 @@ func (r *Roll20Browser) periodicGetCharacterSheets(isPreload bool) {
 
 	for !r.closed {
 		logrus.Printf("Starting periodic character sheet fetch")
-		names, err := r.ListCharacterSheets(isPreload)
+		names, err := r.listCharacterSheets(isPreload)
 		if err != nil {
 			logrus.Errorf("Error getting character sheets: %s", err)
 			r.Relaunch()
